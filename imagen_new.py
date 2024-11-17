@@ -21,11 +21,27 @@ df = pd.read_csv(dataset_path, delimiter=';', encoding='ISO-8859-1')
 if os.path.exists(new_dataset_path):
     new_df = pd.read_csv(new_dataset_path, delimiter=';', encoding='ISO-8859-1')
 else:
-    new_df = pd.DataFrame(columns=["imagen", "descripcion", "generated_description", "fecha"])
+    new_df = pd.DataFrame(columns=["imagen", "descripcion", "generated_description", "palabras_clave", "fecha"])
 
 # Prompt para generar descripciones concisas
 describe_system_prompt = '''
 Eres un sistema especializado en generar descripciones breves y precisas para escenas culturales y eventos andinos, especialmente de la festividad de la Mamacha Carmen en Paucartambo. Describe de manera clara y objetiva la escena principal, destacando solo los elementos visibles y relevantes sin adornos adicionales. Mantente directo y conciso.
+'''
+
+# Prompt para palabras clave
+keywords_system_prompt = '''
+Eres un agente especializado en etiquetar imágenes de escenas culturales y rituales andinas con palabras clave relevantes basadas en festividades tradicionales andinas, especialmente la celebración de la Mamacha Carmen en Paucartambo.
+
+Se te proporcionará una imagen y un título que describe la escena. Tu objetivo es extraer palabras clave concisas y en minúsculas que reflejen temas culturales y rituales andinos.
+
+Las palabras clave deben describir aspectos como:
+
+- Símbolos u objetos culturales, por ejemplo: 'máscara', 'altar', 'danza', 'procesión'
+- Elementos rituales, por ejemplo: 'ofrenda', 'sincretismo', 'devoción'
+- Elementos de identidad y transformación, por ejemplo: 'identidad mestiza', 'ancestral', 'guardián'
+- Contexto social e histórico, por ejemplo: 'qhapac qolla', 'qhapac negro', 'virgen del carmen'
+
+Incluye solo palabras clave directamente relevantes y claramente representadas en la imagen. Devuelve las palabras clave como un arreglo de cadenas, por ejemplo: ['máscara', 'devoción', 'virgen del carmen'].
 '''
 
 # Función para combinar ejemplos
@@ -52,26 +68,22 @@ def describe_image(img_url, title, example_descriptions):
     )
     return response.choices[0].message.content.strip()
 
-# Función para generar preguntas dinámicas
-def generate_questions_from_description(description):
-    questions = [
-        f"¿Qué elementos destacan en '{description[:50]}...'?",
-        f"¿Cuál es el contexto cultural de esta escena?",
-        "¿Qué simbolismo tiene esta imagen?"
-    ]
-    return questions
+# Función para obtener palabras clave
+def extract_keywords(img_url, title):
+    prompt = f"{keywords_system_prompt}\n\nGenera palabras clave para la siguiente imagen:\nTítulo: {title}"
+    response = client.chat.completions.create(
+        model="gpt-4-turbo",
+        messages=[
+            {"role": "system", "content": keywords_system_prompt},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=150,
+        temperature=0.2
+    )
+    return response.choices[0].message.content.strip()
 
 # Inicializar la aplicación Streamlit
-st.title("Generador de Descripciones de Imágenes de Danzas de Paucartambo")
-
-# Sidebar para historial y opciones
-with st.sidebar:
-    st.subheader("Opciones")
-    if st.checkbox("Mostrar historial"):
-        if new_df.empty:
-            st.info("No hay descripciones generadas aún.")
-        else:
-            st.dataframe(new_df[["imagen", "descripcion", "generated_description"]])
+st.title("Generador de Descripciones y Palabras Clave para Imágenes de Danzas de Paucartambo")
 
 # Método de carga de imágenes
 option = st.radio("Seleccione el método para proporcionar una imagen:", ("URL de imagen", "Subir imagen"))
@@ -85,29 +97,27 @@ if option == "URL de imagen":
     if title:
         example_descriptions = get_combined_examples(new_df)
         if st.button("Generar Descripción"):
-            with st.spinner("Generando descripción..."):
+            with st.spinner("Procesando..."):
                 try:
                     description = describe_image(img_url, title, example_descriptions)
-                    st.success("Descripción generada con éxito.")
-                    st.write("Descripción en español:")
+                    keywords = extract_keywords(img_url, title)
+                    st.success("Resultados generados con éxito.")
+                    st.write("**Descripción en español:**")
                     st.write(description)
+                    st.write("**Palabras clave:**")
+                    st.write(keywords)
 
                     new_row = {
                         "imagen": img_url,
                         "descripcion": title,
                         "generated_description": description,
+                        "palabras_clave": keywords,
                         "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
                     new_df = pd.concat([new_df, pd.DataFrame([new_row])], ignore_index=True)
                     new_df.to_csv(new_dataset_path, sep=';', index=False, encoding='ISO-8859-1')
-
-                    dynamic_questions = generate_questions_from_description(description)
-                    st.write("**Preguntas relacionadas:**")
-                    for q in dynamic_questions:
-                        if st.button(q):
-                            st.write(f"Respuesta a: {q}")  # Placeholder
                 except Exception as e:
-                    st.error(f"Error al generar la descripción: {e}")
+                    st.error(f"Error al procesar la imagen: {e}")
 else:
     uploaded_file = st.file_uploader("Cargue una imagen", type=["jpg", "jpeg", "png"])
     if uploaded_file:
@@ -118,31 +128,28 @@ else:
         if title:
             example_descriptions = get_combined_examples(new_df)
             if st.button("Generar Descripción"):
-                with st.spinner("Generando descripción..."):
+                with st.spinner("Procesando..."):
                     try:
-                        # Guardar temporalmente la imagen
                         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
                             temp_file.write(uploaded_file.getbuffer())
                             img_url = temp_file.name
 
                         description = describe_image(img_url, title, example_descriptions)
-                        st.success("Descripción generada con éxito.")
-                        st.write("Descripción en español:")
+                        keywords = extract_keywords(img_url, title)
+                        st.success("Resultados generados con éxito.")
+                        st.write("**Descripción en español:**")
                         st.write(description)
+                        st.write("**Palabras clave:**")
+                        st.write(keywords)
 
                         new_row = {
                             "imagen": img_url,
                             "descripcion": title,
                             "generated_description": description,
+                            "palabras_clave": keywords,
                             "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         }
                         new_df = pd.concat([new_df, pd.DataFrame([new_row])], ignore_index=True)
                         new_df.to_csv(new_dataset_path, sep=';', index=False, encoding='ISO-8859-1')
-
-                        dynamic_questions = generate_questions_from_description(description)
-                        st.write("**Preguntas relacionadas:**")
-                        for q in dynamic_questions:
-                            if st.button(q):
-                                st.write(f"Respuesta a: {q}")  # Placeholder
                     except Exception as e:
-                        st.error(f"Error al generar la descripción: {e}")
+                        st.error(f"Error al procesar la imagen: {e}")
