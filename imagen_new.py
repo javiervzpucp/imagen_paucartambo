@@ -61,29 +61,6 @@ def generate_questions_from_description(description):
     ]
     return questions
 
-# Función para exportar historial a CSV
-def export_to_csv(dataframe):
-    csv = dataframe.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="Descargar historial como CSV",
-        data=csv,
-        file_name="historial_descripciones.csv",
-        mime="text/csv",
-    )
-
-# Mostrar historial en formato amigable
-def display_historial(df):
-    if df.empty:
-        st.info("No hay descripciones generadas aún.")
-    else:
-        st.write("Historial de descripciones generadas:")
-        for _, row in df.iterrows():
-            with st.expander(f"Imagen: {row['descripcion']} - {row['fecha']}"):
-                st.image(row['imagen'], caption="Imagen registrada", use_column_width=True)
-                st.write(f"**Título:** {row['descripcion']}")
-                st.write(f"**Descripción generada:** {row['generated_description']}")
-                st.write(f"**Fecha:** {row['fecha']}")
-
 # Inicializar la aplicación Streamlit
 st.title("Generador de Descripciones de Imágenes de Danzas de Paucartambo")
 
@@ -91,17 +68,21 @@ st.title("Generador de Descripciones de Imágenes de Danzas de Paucartambo")
 with st.sidebar:
     st.subheader("Opciones")
     if st.checkbox("Mostrar historial"):
-        display_historial(new_df)
-        export_to_csv(new_df)
+        if new_df.empty:
+            st.info("No hay descripciones generadas aún.")
+        else:
+            st.dataframe(new_df[["imagen", "descripcion", "generated_description"]])
 
 # Método de carga de imágenes
 option = st.radio("Seleccione el método para proporcionar una imagen:", ("URL de imagen", "Subir imagen"))
 
 if option == "URL de imagen":
     img_url = st.text_input("Ingrese la URL de la imagen")
-    title = st.text_input("Ingrese un título o descripción breve de la imagen")
-    if img_url and title:
+    if img_url:
         st.image(img_url, caption="Imagen desde URL", use_column_width=True)
+
+    title = st.text_input("Ingrese un título o descripción breve de la imagen")
+    if title:
         example_descriptions = get_combined_examples(new_df)
         if st.button("Generar Descripción"):
             with st.spinner("Generando descripción..."):
@@ -129,37 +110,39 @@ if option == "URL de imagen":
                     st.error(f"Error al generar la descripción: {e}")
 else:
     uploaded_file = st.file_uploader("Cargue una imagen", type=["jpg", "jpeg", "png"])
-    title = st.text_input("Ingrese un título o descripción breve de la imagen")
-    if uploaded_file and title:
+    if uploaded_file:
         image = Image.open(uploaded_file)
         st.image(image, caption="Imagen cargada", use_column_width=True)
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
-            temp_file.write(uploaded_file.getbuffer())
-            img_url = temp_file.name
+        title = st.text_input("Ingrese un título o descripción breve de la imagen")
+        if title:
+            example_descriptions = get_combined_examples(new_df)
+            if st.button("Generar Descripción"):
+                with st.spinner("Generando descripción..."):
+                    try:
+                        # Guardar temporalmente la imagen
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
+                            temp_file.write(uploaded_file.getbuffer())
+                            img_url = temp_file.name
 
-        example_descriptions = get_combined_examples(new_df)
-        if st.button("Generar Descripción"):
-            with st.spinner("Generando descripción..."):
-                try:
-                    description = describe_image(img_url, title, example_descriptions)
-                    st.success("Descripción generada con éxito.")
-                    st.write("Descripción en español:")
-                    st.write(description)
+                        description = describe_image(img_url, title, example_descriptions)
+                        st.success("Descripción generada con éxito.")
+                        st.write("Descripción en español:")
+                        st.write(description)
 
-                    new_row = {
-                        "imagen": img_url,
-                        "descripcion": title,
-                        "generated_description": description,
-                        "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    new_df = pd.concat([new_df, pd.DataFrame([new_row])], ignore_index=True)
-                    new_df.to_csv(new_dataset_path, sep=';', index=False, encoding='ISO-8859-1')
+                        new_row = {
+                            "imagen": img_url,
+                            "descripcion": title,
+                            "generated_description": description,
+                            "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        new_df = pd.concat([new_df, pd.DataFrame([new_row])], ignore_index=True)
+                        new_df.to_csv(new_dataset_path, sep=';', index=False, encoding='ISO-8859-1')
 
-                    dynamic_questions = generate_questions_from_description(description)
-                    st.write("**Preguntas relacionadas:**")
-                    for q in dynamic_questions:
-                        if st.button(q):
-                            st.write(f"Respuesta a: {q}")  # Placeholder
-                except Exception as e:
-                    st.error(f"Error al generar la descripción: {e}")
+                        dynamic_questions = generate_questions_from_description(description)
+                        st.write("**Preguntas relacionadas:**")
+                        for q in dynamic_questions:
+                            if st.button(q):
+                                st.write(f"Respuesta a: {q}")  # Placeholder
+                    except Exception as e:
+                        st.error(f"Error al generar la descripción: {e}")
