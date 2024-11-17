@@ -104,9 +104,13 @@ if option == "URL de imagen":
                     st.success("Resultados generados con éxito.")
                     st.write("**Descripción en español:**")
                     st.write(description)
-                    st.write("**Palabras clave:**")
-                    st.write(keywords)
 
+                    # Mostrar palabras clave como etiquetas
+                    st.write("**Palabras clave:**")
+                    for keyword in eval(keywords):  # Eval para convertir la lista en string a lista real
+                        st.button(keyword, key=f"keyword_{keyword}")
+
+                    # Guardar resultados
                     new_row = {
                         "imagen": img_url,
                         "descripcion": title,
@@ -139,9 +143,13 @@ else:
                         st.success("Resultados generados con éxito.")
                         st.write("**Descripción en español:**")
                         st.write(description)
-                        st.write("**Palabras clave:**")
-                        st.write(keywords)
 
+                        # Mostrar palabras clave como etiquetas
+                        st.write("**Palabras clave:**")
+                        for keyword in eval(keywords):  # Eval para convertir la lista en string a lista real
+                            st.button(keyword, key=f"keyword_{keyword}")
+
+                        # Guardar resultados
                         new_row = {
                             "imagen": img_url,
                             "descripcion": title,
